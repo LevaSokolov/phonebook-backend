@@ -25,6 +25,11 @@ const port = 5432;
 const SECRET = 'shhhhh';
 
 // eslint-disable-next-line no-unused-vars
+function errorHandler(errorMessage, response) {
+  response.statusCode = 400;
+  response.end(JSON.stringify({ message: errorMessage }));
+}
+
 function getUserId(headers, response) {
   try {
     const token = headers.authorization;
@@ -32,7 +37,8 @@ function getUserId(headers, response) {
     const { userId } = decoded;
     return userId;
   } catch (err) {
-    return err;
+    errorHandler('Token error', response);
+    return null;
   }
 }
 
@@ -48,23 +54,24 @@ function getDataFromRequestBody(request) {
     });
   });
 }
-
 client.connect();
 
 http
   .createServer(async (request, response) => {
+    const returnError = (errorMessage) => {
+      errorHandler(errorMessage, response);
+    };
     response.setHeader('Access-Control-Allow-Origin', '*');
     response.setHeader('Access-Control-Allow-Headers', '*');
     response.setHeader('Access-Control-Allow-Methods', '*');
     // e: {message: error text};
-    function returnError(errorMessage) {
-      response.statusCode = 400;
-      response.end(JSON.stringify({ message: errorMessage }));
-    }
     // GET
     if (request.method === 'GET') {
       if (request.url === '/contacts') {
-        const userId = getUserId(request.headers);
+        const userId = getUserId(request.headers, response);
+        if (!userId) {
+          return;
+        }
         getAllContacts(userId).then((result) => {
           const rawResult = result.rows;
           const resultJson = JSON.stringify(rawResult);
@@ -79,7 +86,7 @@ http
         const data = await getDataFromRequestBody(request);
         const userId = getUserId(request.headers, response);
         if (!data.phone_number) {
-          returnError('Fill phone number field, fool');
+          returnError('Fill phone number field');
           return;
         }
         // eslint-disable-next-line no-restricted-globals
@@ -112,22 +119,22 @@ http
           });
         return;
       }
-    }
-    if (request.url === '/login') {
-      const data = await getDataFromRequestBody(request);
-      login(data)
-        .then((result) => {
-          if (result.rows.length === 0) {
-            throw new Error('Wrong login or pass');
-          }
-          const token = jwt.sign({ userId: `${result.rows[0].id}` }, SECRET);
-          response.end(JSON.stringify({ token }));
-        })
-        .catch((e) => {
-          response.statusCode = 401;
-          response.end(JSON.stringify({ message: e.message }));
-        });
-      return;
+      if (request.url === '/login') {
+        const data = await getDataFromRequestBody(request);
+        login(data)
+          .then((result) => {
+            if (result.rows.length === 0) {
+              throw new Error('Wrong login or pass');
+            }
+            const token = jwt.sign({ userId: `${result.rows[0].id}` }, SECRET);
+            response.end(JSON.stringify({ token }));
+          })
+          .catch((e) => {
+            response.statusCode = 401;
+            response.end(JSON.stringify({ message: e.message }));
+          });
+        return;
+      }
     }
     // DELETE
     if (request.method === 'DELETE') {
