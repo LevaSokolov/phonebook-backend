@@ -85,13 +85,13 @@ http
       if (request.url === '/contacts-add') {
         const data = await getDataFromRequestBody(request);
         const userId = getUserId(request.headers, response);
-        if (!data.phone_number) {
-          returnError('Fill phone number field');
+        if (!data.phone_number || !data.first_name || !data.last_name) {
+          returnError('Fill all fields');
           return;
         }
         // eslint-disable-next-line no-restricted-globals
         if (isNaN(data.phone_number)) {
-          returnError('Do not write letters in phone field, fool');
+          returnError('Do not write letters in phone field');
           return;
         }
         getAllContactsWithMatchingNumber(data).then((result) => {
